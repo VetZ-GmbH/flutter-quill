@@ -1209,6 +1209,16 @@ class QuillRawEditorState extends EditorState
       );
       return;
     }
+
+    // Reset cursor blink to full opacity when focus is confirmed.
+    // When dirty was true, the cursor timer may have already started
+    // and begun its fade animation. Restarting ensures the first
+    // visible frame shows the cursor at full brightness.
+    if (_hasFocus && controller.selection.isCollapsed) {
+      _cursorCont.stopCursorTimer();
+      _cursorCont.startCursorTimer();
+    }
+
     openOrCloseConnection();
     _cursorCont.startOrStopCursorTimerIfNeeded(_hasFocus, controller.selection);
     _updateOrDisposeSelectionOverlayIfNeeded();
