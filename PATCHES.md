@@ -11,15 +11,13 @@ Base: `ae53f1854262ee50b12186c7fdb7aff78e21da1b` — `fix: normalize list point 
 | 1 | fix: web focus traversal | `lib/src/editor/editor.dart` | Removes a `KeyboardListener` that added an extra Tab stop, breaking web focus traversal. | Upstream PR [#2648](https://github.com/singerdmx/flutter-quill/pull/2648) — track; drop patch once merged upstream. |
 | 2 | fix: drag selection does not request focus on desktop | `lib/src/editor/raw_editor/raw_editor_state.dart` | Drag-selection on desktop did not request editor focus. | Fork-only. Ladegeraet/flutter-quill issue #1. No upstream PR yet. |
 | 3 | fix: cursor delay on first focus when dirty | `lib/src/editor/raw_editor/raw_editor_state.dart` | Cursor stayed faded on first focus when the editor was already dirty; restarts the blink timer at full opacity. | Fork-only. VetZ ticket #49972. No upstream PR. |
-| 4 | chore: point flutter_quill_test at fork git ref | `flutter_quill_test/pubspec.yaml` | Repoints the in-repo `flutter_quill_test` sub-package's `flutter_quill` dep from `^11.0.0` to the fork git ref. Test/dev plumbing only. | Fork-only, **not consumed by One.frontend**. Candidate for deletion — see note. |
+| 4 | feat: opt-in flush list indents on DefaultListBlockStyle | `lib/src/editor/widgets/default_styles.dart`, `lib/src/editor/widgets/text/text_block.dart`, `lib/src/editor/raw_editor/builders/leading_block_builder.dart`, `test/editor/flush_list_indents_test.dart` | VetZ ticket #52640. `flushListIndents` (default `false` = upstream behavior): ul/ol gutters are measured from the actually rendered markers (carried counters, per-level alphabets, text scaling, per-line size overrides) so first-level lists sit flush-left and wide markers never clip. | Fork-only. Candidate for upstream submission. |
 
 ## Notes
 
-- Patch 4 is not a product fix; it only rewires the `flutter_quill_test` sub-package's
-  own `flutter_quill` dependency to a fork git ref. One.frontend does consume
-  `flutter_quill_test` from this repo, but overrides `flutter_quill` workspace-wide,
-  so this patch is inert for production. Kept so the migration stays code-identical
-  to the previous pin. Candidate to drop in r2.
+- The former patch 4 (`chore: point flutter_quill_test at fork git ref`) was dropped
+  in r2 via a revert commit — `flutter_quill_test` depends on hosted `flutter_quill`
+  again, as upstream does. The commit pair cancels out on the next upstream rebase.
 - Patches deliberately do NOT touch `CHANGELOG.md`: upstream edits it in every
   release, making it a permanent rebase-conflict magnet. Changelog entries are
   written in the upstream PR when a patch is submitted, not carried in the stack.

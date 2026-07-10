@@ -186,11 +186,23 @@ class DefaultListBlockStyle extends DefaultTextBlockStyle {
     this.indentWidthBuilder = TextBlockUtils.defaultIndentWidthBuilder,
     this.numberPointWidthBuilder =
         TextBlockUtils.defaultNumberPointWidthBuilder,
+    this.flushListIndents = false,
   });
 
   final QuillCheckboxBuilder? checkboxUIBuilder;
   final LeadingBlockIndentWidth indentWidthBuilder;
   final LeadingBlockNumberPointWidth numberPointWidthBuilder;
+
+  /// Opt-in: compute unordered/ordered list gutters from the actually rendered
+  /// markers instead of fixed em-widths, so list body text sits flush-left and
+  /// wide markers (long numbers, roman numerals) are never clipped.
+  ///
+  /// Defaults to `false`, preserving byte-identical layout. When `true`, it
+  /// takes precedence over [indentWidthBuilder] for `ul`/`ol` blocks and
+  /// measures the DEFAULT leading widgets only — output of a custom
+  /// `customLeadingBlockBuilder` is not measured. Checklists, code blocks and
+  /// quotes are unaffected.
+  final bool flushListIndents;
 
   @override
   DefaultListBlockStyle copyWith({
@@ -202,6 +214,7 @@ class DefaultListBlockStyle extends DefaultTextBlockStyle {
     QuillCheckboxBuilder? checkboxUIBuilder,
     LeadingBlockIndentWidth? indentWidthBuilder,
     LeadingBlockNumberPointWidth? numberPointWidthBuilder,
+    bool? flushListIndents,
   }) {
     return DefaultListBlockStyle(
       style ?? this.style,
@@ -213,6 +226,7 @@ class DefaultListBlockStyle extends DefaultTextBlockStyle {
       indentWidthBuilder: indentWidthBuilder ?? this.indentWidthBuilder,
       numberPointWidthBuilder:
           numberPointWidthBuilder ?? this.numberPointWidthBuilder,
+      flushListIndents: flushListIndents ?? this.flushListIndents,
     );
   }
 }

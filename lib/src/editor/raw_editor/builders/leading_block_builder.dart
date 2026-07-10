@@ -48,74 +48,93 @@ class LeadingConfig {
   final bool value;
   final void Function(bool) onCheckboxTap;
 
-  String? get getIndexNumberByIndent {
-    if (index == null) return null;
-    var s = index.toString();
-    var level = 0;
-    if (!attrs.containsKey(Attribute.indent.key) && indentLevelCounts.isEmpty) {
-      indentLevelCounts.clear();
-      indentLevelCounts[0] = 1;
-      return s;
-    }
-    if (attrs.containsKey(Attribute.indent.key)) {
-      level = attrs[Attribute.indent.key]!.value;
-    } else if (!indentLevelCounts.containsKey(0)) {
-      // first level but is back from previous indent level
-      // supposed to be "2."
-      indentLevelCounts[0] = 1;
-    }
-    if (indentLevelCounts.containsKey(level + 1)) {
-      // last visited level is done, going up
-      indentLevelCounts.remove(level + 1);
-    }
-    final count = (indentLevelCounts[level] ?? 0) + 1;
-    indentLevelCounts[level] = count;
+  String? get getIndexNumberByIndent => computeOrderedLabel(
+    index: index,
+    attrs: attrs,
+    indentLevelCounts: indentLevelCounts,
+  );
+}
 
-    s = count.toString();
-    if (level % 3 == 1) {
-      // a. b. c. d. e. ...
-      s = _toExcelSheetColumnTitle(count);
-    } else if (level % 3 == 2) {
-      // i. ii. iii. ...
-      s = _intToRoman(count);
-    }
+/// Computes the label the ordered-list leading renders for [index], mutating
+/// [indentLevelCounts] exactly as the leading does while it advances the
+/// counters.
+///
+/// Shared by [LeadingConfig.getIndexNumberByIndent] (called with the real,
+/// carried counter map) and the flush-indent gutter simulation in
+/// `text_block.dart` (called with a throwaway clone). Behavior is identical
+/// for both callers, including the quirk that only `level + 1` is popped when
+/// going up a level.
+String? computeOrderedLabel({
+  required int? index,
+  required Map<String, Attribute> attrs,
+  required Map<int, int> indentLevelCounts,
+}) {
+  if (index == null) return null;
+  var s = index.toString();
+  var level = 0;
+  if (!attrs.containsKey(Attribute.indent.key) && indentLevelCounts.isEmpty) {
+    indentLevelCounts.clear();
+    indentLevelCounts[0] = 1;
     return s;
   }
+  if (attrs.containsKey(Attribute.indent.key)) {
+    level = attrs[Attribute.indent.key]!.value;
+  } else if (!indentLevelCounts.containsKey(0)) {
+    // first level but is back from previous indent level
+    // supposed to be "2."
+    indentLevelCounts[0] = 1;
+  }
+  if (indentLevelCounts.containsKey(level + 1)) {
+    // last visited level is done, going up
+    indentLevelCounts.remove(level + 1);
+  }
+  final count = (indentLevelCounts[level] ?? 0) + 1;
+  indentLevelCounts[level] = count;
 
-  String _toExcelSheetColumnTitle(int n) {
-    final result = StringBuffer();
-    while (n > 0) {
-      n--;
-      result.write(String.fromCharCode((n % 26).floor() + 97));
-      n = (n / 26).floor();
-    }
+  s = count.toString();
+  if (level % 3 == 1) {
+    // a. b. c. d. e. ...
+    s = _toExcelSheetColumnTitle(count);
+  } else if (level % 3 == 2) {
+    // i. ii. iii. ...
+    s = _intToRoman(count);
+  }
+  return s;
+}
 
-    return result.toString().split('').reversed.join();
+String _toExcelSheetColumnTitle(int n) {
+  final result = StringBuffer();
+  while (n > 0) {
+    n--;
+    result.write(String.fromCharCode((n % 26).floor() + 97));
+    n = (n / 26).floor();
   }
 
-  String _intToRoman(int input) {
-    var num = input;
+  return result.toString().split('').reversed.join();
+}
 
-    if (num < 0) {
-      return '';
-    } else if (num == 0) {
-      return 'nulla';
-    }
+String _intToRoman(int input) {
+  var num = input;
 
-    final builder = StringBuffer();
-    for (var a = 0; a < _arabianRomanNumbers.length; a++) {
-      final times = (num / _arabianRomanNumbers[a])
-          .truncate(); // equals 1 only when arabianRomanNumbers[a] = num
-      // executes n times where n is the number of times you have to add
-      // the current roman number value to reach current num.
-      builder.write(_romanNumbers[a] * times);
-      num -=
-          times *
-          _arabianRomanNumbers[a]; // subtract previous roman number value from num
-    }
-
-    return builder.toString().toLowerCase();
+  if (num < 0) {
+    return '';
+  } else if (num == 0) {
+    return 'nulla';
   }
+
+  final builder = StringBuffer();
+  for (var a = 0; a < _arabianRomanNumbers.length; a++) {
+    final times = (num / _arabianRomanNumbers[a])
+        .truncate(); // equals 1 only when arabianRomanNumbers[a] = num
+    // executes n times where n is the number of times you have to add
+    // the current roman number value to reach current num.
+    builder.write(_romanNumbers[a] * times);
+    num -=
+        times *
+        _arabianRomanNumbers[a]; // subtract previous roman number value from num
+  }
+
+  return builder.toString().toLowerCase();
 }
 
 const _arabianRomanNumbers = <int>[
