@@ -55,6 +55,45 @@ const List<String> romanNumbers = [
   'I',
 ];
 
+/// Per-line font-size override for a list leading, resolved from the line's
+/// `size` attribute exactly as `_buildLeading` does. Shared by the leading
+/// build and the flush-indent gutter measurement so the two cannot drift.
+double? _lineSizeOverride(Line line, DefaultStyles defaultStyles) {
+  final sizeAttr = line
+      .toDelta()
+      .operations
+      .first
+      .attributes?[Attribute.size.key];
+  return sizeAttr != null
+      ? getFontSizeAsDouble(sizeAttr, defaultStyles: defaultStyles)
+      : null;
+}
+
+/// End padding (gap after the marker) for ul/ol list leadings. Single source
+/// so the leading's `EdgeInsetsDirectional.end` and the flush gutter's end gap
+/// stay in lockstep.
+double _listLeadingEndPadding(double fontSize) => fontSize / 2;
+
+/// Resolves a marker style exactly as `Text.build` does at paint time: when the
+/// per-marker [style] inherits, the ambient [DefaultTextStyle] is merged UNDER
+/// it, then accessibility bold text is folded in. The flush gutter must measure
+/// the same width the marker will paint. A field present only in the ambient
+/// style (letterSpacing, fontFamily, …) but null on the leading style widens the
+/// rendered label past a gutter measured from the leading style alone — enough
+/// to wrap the trailing dot into the one-line leading box, which clips it
+/// (#52640, e.g. `10.` renders as `10`).
+TextStyle _resolveMarkerStyle(
+  TextStyle style, {
+  required TextStyle ambientStyle,
+  required bool boldText,
+}) {
+  var resolved = style.inherit ? ambientStyle.merge(style) : style;
+  if (boldText) {
+    resolved = resolved.merge(const TextStyle(fontWeight: FontWeight.bold));
+  }
+  return resolved;
+}
+
 class EditableTextBlock extends StatelessWidget {
   const EditableTextBlock({
     required this.block,
@@ -174,6 +213,14 @@ class EditableTextBlock extends StatelessWidget {
     if (clearIndents) {
       indentLevelCounts.clear();
     }
+    // Opt-in flush gutter: measured once per ul/ol block, from the actually
+    // rendered markers. Null when disabled or non-list → fall back to the
+    // fixed em-width builder below (byte-identical default behavior).
+    final flushSpacing = _flushListSpacing(
+      context: context,
+      defaultStyles: defaultStyles,
+      indentLevelCounts: indentLevelCounts,
+    );
     var index = 0;
     for (final line in Iterable.castFrom<dynamic, Line>(block.children)) {
       index++;
@@ -204,7 +251,8 @@ class EditableTextBlock extends StatelessWidget {
           customRecognizerBuilder: customRecognizerBuilder,
           composingRange: composingRange,
         ),
-        indentWidthBuilder(block, context, count, numberPointWidthBuilder),
+        flushSpacing ??
+            indentWidthBuilder(block, context, count, numberPointWidthBuilder),
         _getSpacingForLine(line, index, count, defaultStyles),
         textDirection,
         textSelection,
@@ -225,6 +273,76 @@ class EditableTextBlock extends StatelessWidget {
       );
     }
     return children.toList(growable: false);
+  }
+
+  /// Flush-left list gutter: the horizontal spacing that both boxes the leading
+  /// marker and starts the body text. Returns `null` (→ fixed em-width builder)
+  /// unless [DefaultListBlockStyle.flushListIndents] is on and the block is a
+  /// `ul`/`ol` list. Measures the DEFAULT markers the block will render; the
+  /// gutter is sized so the widest marker never clips.
+  HorizontalSpacing? _flushListSpacing({
+    required BuildContext context,
+    required DefaultStyles? defaultStyles,
+    required Map<int, int> indentLevelCounts,
+  }) {
+    if (defaultStyles?.lists?.flushListIndents != true) return null;
+    final listAttr = block.style.attributes[Attribute.list.key];
+    final isOrdered = listAttr == Attribute.ol;
+    final isUnordered = listAttr == Attribute.ul;
+    if (!isOrdered && !isUnordered) return null;
+
+    final fontSize = defaultStyles!.paragraph?.style.fontSize ?? 16;
+    // Indent is a block-level style, constant per block; may arrive as double
+    // from external deltas — treat as num, never `as int`.
+    final indentValue = block.style.attributes[Attribute.indent.key]?.value;
+    final level = indentValue is num ? indentValue.toDouble() : 0.0;
+    final textScaler = MediaQuery.textScalerOf(context);
+    // Resolve marker widths against the SAME ambient style the `Text` markers
+    // inherit at paint time (see _resolveMarkerStyle), so the gutter cannot
+    // under-measure a label the ambient DefaultTextStyle later widens.
+    final ambientStyle = DefaultTextStyle.of(context).style;
+    final boldText = MediaQuery.boldTextOf(context);
+
+    // ul markers render bold (mirrors _buildLeading); ol use the plain leading
+    // style. Color does not affect width, so it is omitted here.
+    final baseStyle = isUnordered
+        ? defaultStyles.leading!.style.copyWith(fontWeight: FontWeight.bold)
+        : defaultStyles.leading!.style;
+
+    // Simulate the label sequence on a CLONE — the real map is mutated later
+    // by the leading widgets as the lines build. Never touch the real map here.
+    final counts = Map<int, int>.from(indentLevelCounts);
+    var maxLabelWidth = 0.0;
+    var index = 0;
+    for (final line in Iterable.castFrom<dynamic, Line>(block.children)) {
+      index++;
+      final label = isUnordered
+          ? '•'
+          : '${computeOrderedLabel(index: index, attrs: line.style.attributes, indentLevelCounts: counts)!}.';
+      final sizeOverride = _lineSizeOverride(line, defaultStyles);
+      final painter = TextPainter(
+        text: TextSpan(
+          text: label,
+          style: _resolveMarkerStyle(
+            baseStyle.copyWith(fontSize: sizeOverride),
+            ambientStyle: ambientStyle,
+            boldText: boldText,
+          ),
+        ),
+        textDirection: textDirection,
+        textScaler: textScaler,
+      )..layout();
+      if (painter.width > maxLabelWidth) maxLabelWidth = painter.width;
+      painter.dispose();
+    }
+
+    // ceilToDouble guards float-equality clipping (RenderEditableTextLine ceils
+    // intrinsics). fontSize * level keeps the existing per-level step (unscaled).
+    final gutter =
+        maxLabelWidth.ceilToDouble() +
+        _listLeadingEndPadding(fontSize) +
+        fontSize * level;
+    return HorizontalSpacing(gutter, 0);
   }
 
   Widget? _buildLeading({
@@ -250,13 +368,7 @@ class EditableTextBlock extends StatelessWidget {
         : null;
 
     // Of the size button
-    final size =
-        line.toDelta().operations.first.attributes?[Attribute.size.key] != null
-        ? getFontSizeAsDouble(
-            line.toDelta().operations.first.attributes?[Attribute.size.key],
-            defaultStyles: defaultStyles,
-          )
-        : null;
+    final size = _lineSizeOverride(line, defaultStyles);
 
     // Of the alignment buttons
     // final textAlign = line.style.attributes[Attribute.align.key]?.value != null
@@ -309,7 +421,7 @@ class EditableTextBlock extends StatelessWidget {
       }(),
       padding: () {
         if (isOrdered || isUnordered) {
-          return fontSize / 2;
+          return _listLeadingEndPadding(fontSize);
         }
         if (isCodeBlock) {
           return fontSize;
