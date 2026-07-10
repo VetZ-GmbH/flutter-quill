@@ -518,6 +518,10 @@ class QuillRawEditorState extends EditorState
 
     _selectionOverlay?.handlesVisible = _shouldShowSelectionHandles();
 
+    if (!_hasFocus) {
+      widget.config.focusNode.requestFocus();
+    }
+
     if (!_keyboardVisible) {
       // This will show the keyboard for all selection changes on the
       // editor, not just changes triggered by user gestures.
