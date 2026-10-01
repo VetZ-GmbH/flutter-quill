@@ -1,10 +1,10 @@
 # VetZ flutter_quill patch stack
 
-`vetz/main` = upstream `ae53f185` (v11.5.1 + 3 upstream commits) + the patches below.
+`vetz/main` = upstream `e880534f` (11.6.0 release commit) + the patches below.
 Each patch is one topic, prefixed `[vetz]`. Rebase the stack onto a newer upstream
 tag to update; never merge upstream into it.
 
-Base: `ae53f1854262ee50b12186c7fdb7aff78e21da1b` — `fix: normalize list point spacing when toggling RTL formatting (#2745)`, described as `v11.5.1-3-gae53f185`.
+Base: `e880534f8750072c879fecd72ada72d0902bc5e8` — `chore(release): prepare to publish 11.6.0`, described as `v11.5.1-13-ge880534f` (no `v11.6.0` tag in this fork yet).
 
 | # | Patch (`[vetz]` prefix dropped) | Files | Reason / ticket | Upstream status |
 |---|---|---|---|---|
@@ -17,12 +17,14 @@ Base: `ae53f1854262ee50b12186c7fdb7aff78e21da1b` — `fix: normalize list point 
 
 - The former patch 4 (`chore: point flutter_quill_test at fork git ref`) was dropped
   in r2 via a revert commit — `flutter_quill_test` depends on hosted `flutter_quill`
-  again, as upstream does. The commit pair cancels out on the next upstream rebase.
+  again, as upstream does. The commit pair nets to zero; it was kept through the r3 rebase and can be dropped together.
 - Patches deliberately do NOT touch `CHANGELOG.md`: upstream edits it in every
   release, making it a permanent rebase-conflict magnet. Changelog entries are
   written in the upstream PR when a patch is submitted, not carried in the stack.
   (The previous private-fork pin carried one such hunk; it was dropped here — the
   only content difference vs. the old pin, docs-only.)
-- Base is 3 upstream commits past the `v11.5.1` tag (Dart 3.12 migration, format,
-  RTL list-spacing fix). Those are genuine upstream commits, so `vetz/main` starts at
-  `ae53f185`, not at the tag. A future rebase onto the next release tag will absorb them.
+- r3 rebased the stack from `ae53f185` (v11.5.1 + 3) onto the 11.6.0 release commit
+  `e880534f`. Patch 4 conflicted in `text_block.dart` with upstream #2733
+  (`showCodeBlockLineNumbers`): the flush gutter now falls back to upstream's
+  `horizontalSpacingForBlock`, and code blocks take upstream's `fontSize / 2` leading
+  padding.
